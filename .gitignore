@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.venv/
+.omp-collab-runs/
+.env
+.env.*
+.omp/
+auth.json
+settings.json

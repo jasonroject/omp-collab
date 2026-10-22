@@ -1,0 +1,4 @@
+interface:
+  display_name: "OMP Collaboration"
+  short_description: "Delegate to OMP models and verify their results"
+  default_prompt: "Use $omp-collab to delegate an independent check to my configured OMP model, then verify and integrate its answer."
