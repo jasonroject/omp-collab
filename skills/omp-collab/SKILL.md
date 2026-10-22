@@ -1,11 +1,11 @@
 ---
 name: omp-collab
-description: Delegate a bounded review, derivation, or draft to a user-authorized model through the local OMP CLI, then verify its answer before integrating it. Use when the user requests OMP, DeepSeek, or another configured OMP model as a collaborator.
+description: Delegate bounded reviews, derivations, or drafts to user-authorized models through the local OMP CLI, including parallel independent workers, then verify their answers before integrating them. Use when the user requests OMP, DeepSeek, or configured OMP models as collaborators.
 ---
 
 # OMP collaboration
 
-Use the installed OMP CLI as a second model. The primary assistant owns the task, checks the response, and integrates accepted work. OMP is local software; inference may go to the provider configured by the user.
+Use the installed OMP CLI for one or more collaborating model processes. The primary assistant owns the task, checks responses, and integrates accepted work. OMP is local software; inference may go to the provider configured by the user.
 
 ## Select a useful assignment
 
@@ -36,6 +36,18 @@ Use this first version for text-based collaboration and instruct the second mode
 Each run writes `request.md`, `response.txt`, `stderr.txt`, and `run.json`. The metadata distinguishes `returned`, `failed`, `timed_out`, and `interrupted`; `returned` means a zero exit code and nonempty stdout, not a correct or complete answer. The review status starts as `pending`. Read the actual response and diagnostics before accepting work. Timeout/interrupt cleanup attempts to stop only this invocation's process tree; cleanup failures are reported in `stderr.txt` and may leave descendants running. Cleanup may take up to 10 seconds beyond the requested limit.
 
 Keep these artifacts private unless the user explicitly authorizes sharing their contents. They may contain the task, code, research, local paths, and provider diagnostics. The repository's `.gitignore` protects only its documented default run directory; custom output locations require their own exclusions.
+
+## Run independent tasks in parallel
+
+When the user authorizes multiple OMP workers, use distinct briefs and start with two simultaneous calls. For example, assign one worker a numerical check and another a unit check. Larger tasks can split into a derivation, an implementation draft, and an independent review. Each worker receives a fresh session; it does not automatically share the primary conversation or another worker's answer.
+
+```text
+python scripts/omp_parallel.py --model deepseek/deepseek-flash --task /path/to/check-a.md --task /path/to/check-b.md --jobs 2 --output /path/to/private-runs --timeout 180
+```
+
+`--jobs` limits simultaneous OMP processes; the timeout is per task and excludes queue time. Each result has its own artifacts, with a `batch.json` tracking the group. A failed or timed-out task stops new launches; calls already running may finish. Ctrl-C requests cancellation of running workers and skips queued tasks. Existing process-cleanup limitations still apply.
+
+Keep dependent work sequential: a reviewer can assess a draft only after receiving it. Never let parallel workers write the same files. Use returned patches as proposals and integrate them centrally. All calls still share the configured provider's rate limits and costs; raising concurrency does not guarantee lower elapsed time. Do not rotate accounts or change providers to bypass limits. If measuring a speedup, compare serial and parallel runs of the same tasks and model, and report one-off timings as such.
 
 ## Review and integrate
 

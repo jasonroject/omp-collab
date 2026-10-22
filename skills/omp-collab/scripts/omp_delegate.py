@@ -12,6 +12,7 @@ import re
 import shutil
 import signal
 import subprocess
+from threading import Event
 import time
 import uuid
 
@@ -26,7 +27,7 @@ SYSTEM_PROMPT = (
 )
 
 
-def run_command(command: list[str], cwd: Path, timeout: float) -> tuple[int | None, str, str, str | None]:
+def run_command(command: list[str], cwd: Path, timeout: float, cancel: Event | None = None) -> tuple[int | None, str, str, str | None]:
     """Capture UTF-8 output and stop this invocation's process group on timeout."""
     options = {"start_new_session": True} if os.name != "nt" else {
         "creationflags": subprocess.CREATE_NO_WINDOW,
@@ -36,9 +37,18 @@ def run_command(command: list[str], cwd: Path, timeout: float) -> tuple[int | No
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         text=True, encoding="utf-8", errors="replace", **options,
     )
+    deadline = time.monotonic() + timeout
     try:
-        stdout, stderr = process.communicate(timeout=timeout)
-        return process.returncode, stdout, stderr, None
+        while True:
+            if cancel is not None and cancel.is_set():
+                raise KeyboardInterrupt
+            remaining = max(0, deadline - time.monotonic())
+            try:
+                stdout, stderr = process.communicate(timeout=min(remaining, 0.25) if cancel is not None else remaining)
+                return process.returncode, stdout, stderr, None
+            except subprocess.TimeoutExpired:
+                if cancel is None or time.monotonic() >= deadline:
+                    raise
     except (subprocess.TimeoutExpired, KeyboardInterrupt) as error:
         reason = "interrupted" if isinstance(error, KeyboardInterrupt) else "timed_out"
         cleanup_notes = []
@@ -86,7 +96,7 @@ def resolve_omp(value: str) -> str:
     return str(path)
 
 
-def delegate(task: Path, model: str, output: Path, executable: str, timeout: int) -> tuple[Path, dict]:
+def delegate(task: Path, model: str, output: Path, executable: str, timeout: int, cancel: Event | None = None) -> tuple[Path, dict]:
     brief = task.read_text(encoding="utf-8-sig")
     if not brief.strip():
         raise ValueError("The task file is empty.")
@@ -103,7 +113,10 @@ def delegate(task: Path, model: str, output: Path, executable: str, timeout: int
     ]
     started = time.monotonic()
     try:
-        returncode, stdout, stderr, stopped = run_command(command, run_dir, timeout)
+        if cancel is None:
+            returncode, stdout, stderr, stopped = run_command(command, run_dir, timeout)
+        else:
+            returncode, stdout, stderr, stopped = run_command(command, run_dir, timeout, cancel)
         status = stopped or (
             "returned" if returncode == 0 and stdout.strip() else "failed"
         )

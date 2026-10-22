@@ -55,7 +55,19 @@ python skills/omp-collab/scripts/omp_delegate.py --model deepseek/deepseek-flash
 
 `returned` 只表示程序正常退出且有输出，答案仍可能不完整或错误。主助手应核查引用、公式、单位和代码，然后记录采用、纠正和暂不采用的内容。模型之间意见一致不能代替证据。
 
-## 第一版的范围
+## 多个 OMP 并行协作
+
+可以把互不依赖的任务交给不同 OMP 进程。例如一个检查计算，另一个检查单位，主助手同时处理剩余工作。默认最多同时运行两个，可用 `--jobs` 调整：
+
+```text
+python skills/omp-collab/scripts/omp_parallel.py --model deepseek/deepseek-flash --task examples/review-task.md --task examples/unit-check-task.md --jobs 2 --timeout 180
+```
+
+每个进程使用独立任务和输出目录，`batch.json` 记录整体进度。一个任务失败或超时后不再启动排队任务，已运行的任务可以完成；Ctrl-C 会请求终止运行中的任务并保留结果。每次调用均为新会话，需要明确提供上下文；依赖前一个结果的任务应顺序执行。
+
+各进程共享服务商额度和限流，并发更多不一定更快，也会分别计费。建议先用2个，确认有收益再增加。主助手统一核查和修改文件，避免多个模型互相覆盖。
+
+## 执行范围
 
 - 使用 CLI 参数关闭 OMP 内置工具、扩展、规则、技能、LSP 和会话保存；在新目录中执行每个任务。
 - 通过参数数组启动程序，任务经文件传递，避免把任务文字拼入 shell 命令。

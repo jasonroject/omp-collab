@@ -36,6 +36,18 @@ The CLI requests disabled built-in tools, extensions, rules, skills, LSP, and se
 
 Timeouts and Ctrl-C attempt to terminate the invocation's process group/tree and retain captured output. Cleanup may take up to 10 extra seconds; failures are recorded in diagnostics and descendants may remain. Task text is supplied through a file with an argument-array process launch, not shell interpolation. Artifacts can contain private context and diagnostics: keep them private. Only the default `.omp-collab-runs/` output directory is covered by this repository's ignore rule; exclude custom locations separately.
 
+## Parallel workers
+
+Independent briefs can run in separate OMP processes, with two concurrent calls by default:
+
+```sh
+python skills/omp-collab/scripts/omp_parallel.py --model deepseek/deepseek-flash --task examples/review-task.md --task examples/unit-check-task.md --jobs 2 --timeout 180
+```
+
+Each worker has separate artifacts; `batch.json` tracks progress. Per-task timeouts exclude queue time. Failure or timeout stops new launches while existing calls may finish. Ctrl-C requests cancellation of running workers and skips queued tasks. Every call starts a fresh session: provide its context explicitly and run dependent tasks sequentially.
+
+Workers share provider quotas and rate limits, with separate request costs. More processes do not guarantee a speedup. Start with two and increase only when useful. The primary assistant integrates proposed changes and verifies answers; workers must not own the same output files.
+
 ## Tests
 
 ```sh
